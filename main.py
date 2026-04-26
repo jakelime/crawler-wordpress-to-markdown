@@ -2,7 +2,6 @@ import requests
 from bs4 import BeautifulSoup
 from markdownify import markdownify
 import os
-import re
 import time
 
 # Target blog URL
@@ -14,14 +13,18 @@ HEADERS = {
 }
 
 
-def sanitize_filename(title):
-    """Sanitizes the post title to be used as a valid file name."""
-    # Remove characters that are not allowed in file names
-    clean_title = re.sub(r'[\\/*?:"<>|]', "", title).strip()
-    return clean_title + ".md"
+def get_filename_from_url(url, index):
+    """Extracts the slug from the URL to be used as a valid file name."""
+    if url.endswith("/"):
+        url = url[:-1]
+    clean_title = url.split("/")[-1]
+    # Fallback if empty
+    if not clean_title:
+        clean_title = "untitled_post"
+    return f"{index}_{clean_title}.md"
 
 
-def extract_post(post_url, output_dir):
+def extract_post(post_url, output_dir, index):
     """Fetches a single post, converts it to markdown, and saves it."""
     print(f"  -> Scraping: {post_url}")
     try:
@@ -51,8 +54,16 @@ def extract_post(post_url, output_dir):
         md_content = markdownify(str(content_area), heading_style="ATX")
 
         # Prepare the file path and write the file
-        filename = sanitize_filename(title)
+        filename = get_filename_from_url(post_url, index)
         filepath = os.path.join(output_dir, filename)
+
+        # Check if file exists, if yes append number
+        counter = 1
+        name, ext = os.path.splitext(filename)
+        while os.path.exists(filepath):
+            filename = f"{name}_{counter}{ext}"
+            filepath = os.path.join(output_dir, filename)
+            counter += 1
 
         with open(filepath, "w", encoding="utf-8") as file:
             # Adding a title header at the top of the file
@@ -128,8 +139,8 @@ def main():
     print(f"\nFound {len(links)} unique posts. Starting extraction...\n")
 
     # 2. Scrape each link and convert to Markdown
-    for link in links:
-        extract_post(link, output_directory)
+    for index, link in enumerate(links, start=1):
+        extract_post(link, output_directory, index)
         # Sleep for a second between posts to respect the server
         time.sleep(1)
 
